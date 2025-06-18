@@ -1,13 +1,5 @@
+// Filename: lib/dify-api.ts (REVISED AND SECURE)
 import type { Persona, Language } from "@/types/chat"
-
-const DIFY_API_KEY = "app-AKLVrjLrC1BKIPl2rbL5hZJD"
-const DIFY_API_ENDPOINT = "https://api.dify.ai/v1/chat-messages"
-
-export interface DifyResponse {
-  answer: string
-  conversation_id: string
-  event: string
-}
 
 export async function sendMessageToDify(
   message: string,
@@ -15,22 +7,22 @@ export async function sendMessageToDify(
   language: Language,
   conversationId?: string,
 ): Promise<ReadableStream<Uint8Array> | null> {
+  
   const requestBody = {
     inputs: {
       persona,
       language: language === "en" ? "English" : "Bengali",
     },
     query: message,
-    response_mode: "streaming",
-    user: "legal-ai-user-123",
+    user: "legal-ai-user-123", // We can improve this later with real user IDs
     ...(conversationId && { conversation_id: conversationId }),
   }
 
   try {
-    const response = await fetch(DIFY_API_ENDPOINT, {
+    // This is the crucial change. It now calls YOUR server at /api/chat.
+    const response = await fetch('/api/chat', { 
       method: "POST",
       headers: {
-        Authorization: `Bearer ${DIFY_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestBody),
@@ -38,12 +30,13 @@ export async function sendMessageToDify(
 
     if (!response.ok) {
       const errorData = await response.json()
-      throw new Error(`API Error: ${response.status} - ${errorData.message || response.statusText}`)
+      throw new Error(`API Error: ${response.status} - ${errorData.error || "Failed to fetch response from server"}`)
     }
 
     return response.body
+
   } catch (error) {
-    console.error("Error fetching from Dify:", error)
+    console.error("Error calling local chat API:", error)
     throw error
   }
 }
