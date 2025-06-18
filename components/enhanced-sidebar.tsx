@@ -73,16 +73,21 @@ export function EnhancedSidebar({
     setShowDeleteConfirm(null)
   }
 
-  const formatDate = (date: Date) => {
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  // The NEW, fixed function
+const formatDate = (date: Date | string) => {
+  // If the 'date' is a string from localStorage, convert it to a real Date object first.
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
 
-    if (days === 0) return "Today"
-    if (days === 1) return "Yesterday"
-    if (days < 7) return `${days} days ago`
-    return date.toLocaleDateString()
-  }
+  // Now, the rest of the function works safely with a real Date object.
+  const now = new Date();
+  const diff = now.getTime() - dateObj.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  return dateObj.toLocaleDateString();
+}
 
   return (
     <aside className="w-64 bg-gray-50 dark:bg-gray-900 flex flex-col border-r border-gray-200 dark:border-gray-700 h-full">

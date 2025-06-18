@@ -1,3 +1,5 @@
+// Filename: components/enhanced-chat-page.tsx (FULLY UPDATED)
+
 "use client"
 
 import { useState, useRef, useEffect } from "react"
@@ -85,14 +87,23 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
     setShowChatActions(false)
   }
 
+  // ##################################################################
+  // ### THIS IS THE FUNCTION WITH THE FIX ###
+  // ##################################################################
   const handleLoadConversation = (conversation: SavedConversation) => {
     // Save current conversation first
     if (chatState.messages.length > 0 && currentConversationId) {
       saveConversation(chatState.messages, currentConversationId)
     }
 
+    // <-- FIX: Rehydrate message timestamps from strings to Date objects
+    const messagesWithDates = conversation.messages.map(msg => ({
+      ...msg,
+      timestamp: new Date(msg.timestamp) 
+    }));
+
     setChatState({
-      messages: conversation.messages,
+      messages: messagesWithDates, // <-- FIX: Use the fixed messages array
       conversationId: conversation.id,
       isTyping: false,
     })
@@ -126,23 +137,19 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
     if (currentConversationId && chatState.messages.length > 0) {
       saveConversation(chatState.messages, currentConversationId)
       setShowChatActions(false)
-      // Show success message
       alert(language === "en" ? "Chat saved successfully!" : "চ্যাট সফলভাবে সংরক্ষিত হয়েছে!")
     }
   }
 
   const handleShareChat = (platform: string) => {
     if (chatState.messages.length === 0) return
-
     const chatContent = chatState.messages.map((msg) => `${msg.isUser ? "You" : "AI"}: ${msg.content}`).join("\n\n")
-
     const shareText = `Check out this legal AI conversation:\n\n${chatContent.substring(0, 500)}...`
-
     if (platform === "whatsapp") {
       window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank")
     } else if (platform === "facebook") {
       window.open(
-        `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}&quote=${encodeURIComponent(shareText)}`,
+        `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}"e=${encodeURIComponent(shareText)}`,
         "_blank",
       )
     }
@@ -153,7 +160,6 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
     const newConversationId = currentConversationId || Date.now().toString()
     setCurrentConversationId(newConversationId)
 
-    // Update chat title if it's the first message
     if (chatState.messages.length === 0) {
       setChatTitle(generateConversationTitle(messageContent))
     }
@@ -247,7 +253,6 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
         conversationId: newDifyConversationId,
       }))
 
-      // Auto-save conversation after each exchange
       setTimeout(() => {
         setChatState((currentState) => {
           saveConversation(currentState.messages, newConversationId)
@@ -282,7 +287,7 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
             onLanguageChange={onLanguageChange}
             onNewChat={handleNewChat}
             conversations={conversations}
-            currentConversationId={currentConversationId}
+            currentConversationId={currentConversationId ?? undefined}
             onLoadConversation={handleLoadConversation}
             onDeleteConversation={handleDeleteConversation}
             onCloseMobile={() => setShowMobileSidebar(false)}
@@ -297,7 +302,7 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
           onLanguageChange={onLanguageChange}
           onNewChat={handleNewChat}
           conversations={conversations}
-          currentConversationId={currentConversationId}
+          currentConversationId={currentConversationId ?? undefined}
           onLoadConversation={handleLoadConversation}
           onDeleteConversation={handleDeleteConversation}
         />
@@ -306,7 +311,6 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
       <main className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
-          {/* Left side - Mobile menu + Chat title */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowMobileSidebar(true)}
@@ -314,8 +318,6 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
             >
               <Menu className="w-5 h-5" />
             </button>
-
-            {/* Chat Title */}
             <div className="flex items-center gap-2">
               {isEditingTitle ? (
                 <div className="flex items-center gap-2">
@@ -344,8 +346,6 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
               )}
             </div>
           </div>
-
-          {/* Right side - User profile */}
           <div className="flex items-center gap-3">
             {isAuthenticated && user ? (
               <button
@@ -368,42 +368,24 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
           </div>
         </div>
 
-        {/* Chat Actions Dropdown */}
         {showChatActions && (
           <div className="absolute top-16 left-4 lg:left-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-30 py-2 min-w-48">
-            <button
-              onClick={handleRenameChat}
-              className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <Edit3 className="w-4 h-4" />
-              {language === "en" ? "Rename Chat" : "চ্যাট নাম পরিবর্তন"}
+            <button onClick={handleRenameChat} className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+              <Edit3 className="w-4 h-4" /> {language === "en" ? "Rename Chat" : "চ্যাট নাম পরিবর্তন"}
             </button>
-            <button
-              onClick={handleSaveChat}
-              className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <Save className="w-4 h-4" />
-              {language === "en" ? "Save Chat" : "চ্যাট সংরক্ষণ"}
+            <button onClick={handleSaveChat} className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+              <Save className="w-4 h-4" /> {language === "en" ? "Save Chat" : "চ্যাট সংরক্ষণ"}
             </button>
             <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-            <button
-              onClick={() => handleShareChat("whatsapp")}
-              className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <Share2 className="w-4 h-4" />
-              {language === "en" ? "Share via WhatsApp" : "WhatsApp এ শেয়ার"}
+            <button onClick={() => handleShareChat("whatsapp")} className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+              <Share2 className="w-4 h-4" /> {language === "en" ? "Share via WhatsApp" : "WhatsApp এ শেয়ার"}
             </button>
-            <button
-              onClick={() => handleShareChat("facebook")}
-              className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <Share2 className="w-4 h-4" />
-              {language === "en" ? "Share via Messenger" : "Messenger এ শেয়ার"}
+            <button onClick={() => handleShareChat("facebook")} className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+              <Share2 className="w-4 h-4" /> {language === "en" ? "Share via Messenger" : "Messenger এ শেয়ার"}
             </button>
           </div>
         )}
 
-        {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="max-w-4xl mx-auto px-4 py-6">
             <div className="space-y-6">
@@ -426,7 +408,6 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
           </div>
         </div>
 
-        {/* Chat Input - Made wider for web */}
         <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
           <div className="max-w-4xl mx-auto">
             <EnhancedChatInput
@@ -440,10 +421,7 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
         </div>
       </main>
 
-      {/* Profile Modal */}
       {showProfileModal && <ProfileModal language={language} onClose={() => setShowProfileModal(false)} />}
-
-      {/* Click outside to close chat actions */}
       {showChatActions && <div className="fixed inset-0 z-20" onClick={() => setShowChatActions(false)} />}
     </div>
   )
