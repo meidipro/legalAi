@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Legal Assistant BD</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Welcome Page -->
+    <div id="welcome-page" class="page active">
+        <header class="welcome-header">
+            <h1 id="welcome-logo">LegalAI BD</h1>
+            <div class="language-switcher">
+                <button class="lang-btn" data-lang="en">EN</button>
+                <button class="lang-btn" data-lang="bn">BN</button>
+            </div>
+        </header>
+        <main class="welcome-main">
+            <h2 id="welcome-title">Your AI-Powered Bangladesh Legal Assistant</h2>
+            <p id="welcome-subtitle">Get simplified legal information, analyze laws, and understand your rights. Powered by live data from official sources.</p>
+            <button id="get-started-btn" class="cta-button">Get Started</button>
+        </main>
+        <footer class="welcome-footer">
+            <p id="welcome-disclaimer">This is a prototype for informational purposes. Consult a lawyer for legal advice.</p>
+        </footer>
+    </div>
+
+    <!-- Chat Page -->
+    <div id="chat-page" class="page">
+        <div class="chat-container">
+            <!-- Left Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h1 id="chat-logo">LegalAI BD</h1>
+                    <button id="new-chat-btn" class="new-chat-button">+ New Chat</button>
+                </div>
+                <div class="conversations">
+                    <p id="conversations-title">Your conversations</p>
+                    <!-- Conversation history can be added here later -->
+                </div>
+                <div class="sidebar-footer">
+                    <div class="language-switcher">
+                        <button class="lang-btn active" data-lang="en">EN</button>
+                        <button class="lang-btn" data-lang="bn">BN</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Chat Window -->
+            <main class="chat-window">
+                <div id="message-container" class="message-container">
+                    <!-- Chat messages will be dynamically inserted here -->
+                </div>
+                <div class="chat-input-area">
+                    <form id="chat-form" class="chat-form">
+                        <select id="persona-select">
+                            <option value="General Public" id="persona-public">I am: General Public</option>
+                            <option value="Law Student" id="persona-student">I am: Law Student</option>
+                            <option value="Lawyer" id="persona-lawyer">I am: Lawyer</option>
+                        </select>
+                        <input type="text" id="message-input" placeholder="Ask about a legal situation or define a term..." autocomplete="off">
+                        <button type="submit" id="send-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
+                        </button>
+                    </form>
+                    <p id="chat-disclaimer" class="chat-disclaimer">This is a prototype. Not legal advice. AI can make mistakes.</p>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- This is a hidden template for creating new chat messages -->
+    <template id="message-template">
+        <div class="message">
+            <div class="avatar"></div>
+            <div class="text-content"></div>
+        </div>
+    </template>
+
+    <script src="script.js"></script>
+</body>
+</html>
