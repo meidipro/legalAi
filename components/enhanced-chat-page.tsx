@@ -150,13 +150,26 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
     setPersona(conversation.persona);
   };
 
-  const handleDeleteConversation = (id: string) => {
-    // This will be implemented later with a DELETE API call
-    setConversations((prev) => prev.filter((c) => c.id !== id));
-    if (currentConversationId === id) {
-      handleNewChat();
+  const handleDeleteConversation = async (id: string) => {
+  // Optimistically remove from UI
+  const originalConversations = conversations;
+  setConversations(prev => prev.filter(c => c.id !== id));
+  if (currentConversationId === id) {
+    handleNewChat();
+  }
+
+  try {
+    const response = await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      // If API fails, revert the UI change
+      setConversations(originalConversations);
+      throw new Error("Failed to delete conversation");
     }
-  };
+  } catch (error) {
+    console.error(error);
+    setConversations(originalConversations);
+  }
+};
 
   const handleRenameChat = () => {
     setTempTitle(chatTitle);
@@ -164,13 +177,33 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
     setShowChatActions(false);
   };
 
-  const handleSaveTitle = () => {
-    setChatTitle(tempTitle);
+  const handleSaveTitle = async () => {
+  if (!currentConversationId || tempTitle === chatTitle) {
     setIsEditingTitle(false);
-    if (currentConversationId && chatState.messages.length > 0) {
-      saveConversation(chatState.messages, currentConversationId);
+    return;
+  }
+  
+  const originalTitle = chatTitle;
+  setChatTitle(tempTitle); // Optimistic update
+  setIsEditingTitle(false);
+
+  try {
+    const response = await fetch(`/api/conversations/${currentConversationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: tempTitle }),
+    });
+    if (!response.ok) {
+      setChatTitle(originalTitle); // Revert on failure
+      throw new Error("Failed to rename conversation");
     }
-  };
+    // Also update the title in the main conversation list
+    setConversations(prev => prev.map(c => c.id === currentConversationId ? {...c, title: tempTitle} : c));
+  } catch (error) {
+    console.error(error);
+    setChatTitle(originalTitle);
+  }
+};
   
   const handleSendMessage = async (messageContent: string, attachments?: FileAttachment[]) => {
     const newConvId = currentConversationId || crypto.randomUUID();
@@ -260,6 +293,7 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
             onLoadConversation={handleLoadConversation}
             onDeleteConversation={handleDeleteConversation}
             onCloseMobile={() => setShowMobileSidebar(false)}
+            isLoadingHistory={isLoadingHistory}
           />
         </div>
       </div>
@@ -274,6 +308,7 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
           currentConversationId={currentConversationId ?? undefined}
           onLoadConversation={handleLoadConversation}
           onDeleteConversation={handleDeleteConversation}
+          isLoadingHistory={isLoadingHistory}
         />
       </div>
 

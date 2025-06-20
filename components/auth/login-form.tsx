@@ -1,11 +1,14 @@
+// Filename: components/auth/login-form.tsx (UPDATED TO REMOVE DEMO TEXT)
+
 "use client"
 
 import type React from "react"
 import { useState } from "react"
-import { Eye, EyeOff, Mail, Lock, Loader2, AlertCircle } from "lucide-react"
+import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { translations } from "@/lib/translations"
-import type { Language, LoginCredentials } from "@/types/auth"
+import type { LoginCredentials } from "@/types/auth";
+import type { Language } from "@/types/chat"; 
 import { ForgotPasswordForm } from "./forgot-password-form"
 
 interface LoginFormProps {
@@ -29,7 +32,6 @@ export function LoginForm({ language, onSwitchToSignup, onClose }: LoginFormProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-
     try {
       await login(credentials)
       onClose()
@@ -38,7 +40,7 @@ export function LoginForm({ language, onSwitchToSignup, onClose }: LoginFormProp
     }
   }
 
-  const handleSocialLogin = async (provider: "google") => {
+  const handleSocialLogin = async () => {
     setError(null)
     try {
       await loginWithGoogle()
@@ -63,25 +65,12 @@ export function LoginForm({ language, onSwitchToSignup, onClose }: LoginFormProp
         </p>
       </div>
 
-      {/* Demo Mode Notice */}
-      <div className="mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-blue-800 dark:text-blue-200">
-            <p className="font-medium mb-1">{language === "en" ? "Demo Mode Active" : "ডেমো মোড সক্রিয়"}</p>
-            <p>
-              {language === "en"
-                ? "Google OAuth is running in demo mode for this preview. All authentication features work normally."
-                : "এই প্রিভিউয়ের জন্য Google OAuth ডেমো মোডে চলছে। সমস্ত প্রমাণীকরণ বৈশিষ্ট্য স্বাভাবিকভাবে কাজ করে।"}
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* The "Demo Mode Active" block has been deleted from here */}
 
       {/* Social Login Buttons */}
       <div className="space-y-3 mb-6">
         <button
-          onClick={() => handleSocialLogin("google")}
+          onClick={handleSocialLogin}
           disabled={isLoading}
           className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
         >
@@ -103,7 +92,8 @@ export function LoginForm({ language, onSwitchToSignup, onClose }: LoginFormProp
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
             />
           </svg>
-          {language === "en" ? "Continue with Google (Demo)" : "Google দিয়ে চালিয়ে যান (ডেমো)"}
+          {/* CHANGE: Removed "(Demo)" */}
+          {language === "en" ? "Continue with Google" : "Google দিয়ে চালিয়ে যান"}
         </button>
       </div>
 
@@ -120,6 +110,7 @@ export function LoginForm({ language, onSwitchToSignup, onClose }: LoginFormProp
 
       {/* Email Login Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* ... rest of the form is unchanged ... */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             {language === "en" ? "Email" : "ইমেইল"}
@@ -185,20 +176,20 @@ export function LoginForm({ language, onSwitchToSignup, onClose }: LoginFormProp
           {language === "en" ? "Sign In" : "সাইন ইন"}
         </button>
       </form>
+      
+      {/* I am leaving the demo credentials box for your convenience during testing */}
+      <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <p className="text-xs text-gray-600 dark:text-gray-400 text-center">
+          {language === "en" ? "Demo: test@example.com / password" : "ডেমো: test@example.com / password"}
+        </p>
+      </div>
 
-      <div className="mt-6 text-center">
+       <div className="mt-6 text-center">
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {language === "en" ? "Don't have an account? " : "অ্যাকাউন্ট নেই? "}
           <button onClick={onSwitchToSignup} className="text-blue-500 hover:text-blue-600 font-medium">
             {language === "en" ? "Sign up" : "সাইন আপ করুন"}
           </button>
-        </p>
-      </div>
-
-      {/* Demo credentials */}
-      <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-        <p className="text-xs text-gray-600 dark:text-gray-400 text-center">
-          {language === "en" ? "Demo: test@example.com / password" : "ডেমো: test@example.com / password"}
         </p>
       </div>
     </div>

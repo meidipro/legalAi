@@ -1,3 +1,5 @@
+// Filename: components/auth/profile-modal.tsx (UPDATED)
+
 "use client"
 
 import type React from "react"
@@ -5,7 +7,9 @@ import { useState, useRef } from "react"
 import { X, Camera, User, Save, Loader2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
-import type { Language, ProfileUpdateData } from "@/types/auth"
+import { supabase } from "@/lib/supabase-client"; // <-- Import Supabase client
+import type { ProfileUpdateData } from "@/types/auth";
+import type { Language } from "@/types/chat";
 
 interface ProfileModalProps {
   language: Language
@@ -13,13 +17,13 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ language, onClose }: ProfileModalProps) {
-  const { user, updateProfile, logout, isLoading } = useAuth()
+  const { user, logout, isLoading: isAuthLoading } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const [formData, setFormData] = useState({
-    name: user?.name || "",
-    avatar: null as File | null,
-  })
+  
+  const [name, setName] = useState(user?.name || "");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(user?.avatar || null)
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -29,199 +33,122 @@ export function ProfileModal({ language, onClose }: ProfileModalProps) {
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        // 5MB limit
-        setError(language === "en" ? "File size must be less than 5MB" : "ফাইলের আকার ৫MB এর কম হতে হবে")
-        return
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        setError("File size must be less than 2MB");
+        return;
       }
-
-      setFormData((prev) => ({ ...prev, avatar: file }))
-
-      // Create preview URL
-      const reader = new FileReader()
-      reader.onload = () => {
-        setPreviewUrl(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+      setAvatarFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setSuccess(null)
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setIsUploading(true);
 
     try {
-      const updateData: ProfileUpdateData = {
-        name: formData.name,
-        preferences: {
-          language,
-          theme,
-          notifications: user.preferences?.notifications ?? true,
-        },
+      // Step 1: Upload new avatar if one was selected
+      if (avatarFile) {
+        const filePath = `${user.id}/${Date.now()}_${avatarFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, avatarFile, { upsert: true });
+
+        if (uploadError) throw new Error(`Avatar upload failed: ${uploadError.message}`);
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        // Update the user's avatar_url metadata in Supabase Auth
+        await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
       }
 
-      if (formData.avatar) {
-        updateData.avatar = formData.avatar
+      // Step 2: Update the user's name via our API
+      if (name !== user.name) {
+          const response = await fetch('/api/profile', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name }),
+          });
+          if (!response.ok) {
+              const { error } = await response.json();
+              throw new Error(error || "Failed to update profile name.");
+          }
       }
+      
+      setSuccess("Profile updated successfully!");
+      // Optionally, you may want to trigger a user data refresh here if your context supports it.
+      
+      // Optional: Close modal after a short delay
+      setTimeout(() => onClose(), 1500);
 
-      await updateProfile(updateData)
-      setSuccess(language === "en" ? "Profile updated successfully!" : "প্রোফাইল সফলভাবে আপডেট হয়েছে!")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update profile")
+      setError(err instanceof Error ? err.message : "Failed to update profile");
+    } finally {
+      setIsUploading(false);
     }
   }
 
   const handleLogout = async () => {
-    try {
-      await logout()
-      onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to logout")
-    }
+    await logout();
+    onClose();
   }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            {language === "en" ? "Profile Settings" : "প্রোফাইল সেটিংস"}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Profile Settings</h2>
+          <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        {/* Content */}
         <div className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Avatar Upload */}
             <div className="flex flex-col items-center">
               <div className="relative">
                 <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                  {previewUrl ? (
-                    <img src={previewUrl || "/placeholder.svg"} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="w-12 h-12 text-gray-400" />
-                  )}
+                  {previewUrl ? <img src={previewUrl} alt="Profile" className="w-full h-full object-cover" /> : <User className="w-12 h-12 text-gray-400" />}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors"
-                >
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600">
                   <Camera className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                {language === "en" ? "Click to change profile picture" : "প্রোফাইল ছবি পরিবর্তন করতে ক্লিক করুন"}
-              </p>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
             </div>
 
-            {/* Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {language === "en" ? "Full Name" : "পূর্ণ নাম"}
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                required
-              />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Full Name</label>
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg" required />
             </div>
 
-            {/* Email (read-only) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {language === "en" ? "Email" : "ইমেইল"}
-              </label>
-              <input
-                type="email"
-                value={user.email}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-600 text-gray-500 dark:text-gray-400"
-                disabled
-              />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+              <input type="email" value={user.email} className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100" disabled />
             </div>
-
-            {/* Account Info */}
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
-                {language === "en" ? "Account Information" : "অ্যাকাউন্টের তথ্য"}
-              </h3>
-              <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <div className="flex justify-between">
-                  <span>{language === "en" ? "Provider:" : "প্রদানকারী:"}</span>
-                  <span className="capitalize">{user.provider}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{language === "en" ? "Member since:" : "সদস্য হওয়ার তারিখ:"}</span>
-                  <span>{user.createdAt.toLocaleDateString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{language === "en" ? "Last login:" : "শেষ লগইন:"}</span>
-                  <span>{user.lastLoginAt.toLocaleDateString()}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Theme Toggle */}
+            
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {language === "en" ? "Dark Mode" : "ডার্ক মোড"}
-              </span>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  theme === "dark" ? "bg-blue-500" : "bg-gray-300"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    theme === "dark" ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
+              <span className="text-sm font-medium">Dark Mode</span>
+              <button type="button" onClick={toggleTheme} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'dark' ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </div>
 
-            {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              </div>
-            )}
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            {success && <p className="text-sm text-green-600">{success}</p>}
 
-            {success && (
-              <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                <p className="text-sm text-green-600 dark:text-green-400">{success}</p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+            <div className="space-y-3 pt-4 border-t">
+              <button type="submit" disabled={isUploading || isAuthLoading} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg flex items-center justify-center gap-2">
+                {(isUploading || isAuthLoading) && <Loader2 className="w-4 h-4 animate-spin" />}
                 <Save className="w-4 h-4" />
-                {language === "en" ? "Save Changes" : "পরিবর্তন সংরক্ষণ করুন"}
+                Save Changes
               </button>
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg transition-colors"
-              >
-                {language === "en" ? "Sign Out" : "সাইন আউট"}
+              <button type="button" onClick={handleLogout} className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg">
+                Sign Out
               </button>
             </div>
           </form>
