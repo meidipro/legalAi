@@ -1,4 +1,4 @@
-// Filename: components/enhanced-chat-page.tsx (CORRECTED)
+// Filename: components/enhanced-chat-page.tsx (REFACTORED AND CORRECTED)
 
 "use client";
 
@@ -19,13 +19,13 @@ interface EnhancedChatPageProps {
 }
 
 export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPageProps) {
+  // --- STATE MANAGEMENT ---
   const [chatState, setChatState] = useState<ChatState>({ messages: [], conversationId: null, isTyping: false });
   const [persona, setPersona] = useState<Persona>("General Public");
   const [currentConversation, setCurrentConversation] = useState<SavedConversation | null>(null);
   const [conversations, setConversations] = useState<SavedConversation[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   
-  // UI State
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -33,9 +33,13 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
   const { user, isAuthenticated } = useAuth();
   const t = translations[language];
 
-  // --- DATA FETCHING ---
+  // --- DATA FETCHING AND EFFECTS ---
+
   const fetchConversations = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      setConversations([]); // Clear conversations if user logs out
+      return;
+    }
     setIsLoadingHistory(true);
     try {
       const response = await fetch('/api/conversations');
@@ -63,7 +67,7 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatState.messages]);
 
-  // --- CORE CHAT ACTIONS ---
+  // --- CORE CONVERSATION HANDLERS ---
   
   const handleNewChat = () => {
     setCurrentConversation(null);
@@ -84,9 +88,7 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
     }
     try {
       const response = await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
-      if (!response.ok) {
-        setConversations(originalConversations);
-      }
+      if (!response.ok) setConversations(originalConversations); // Revert on failure
     } catch (error) {
       console.error(error);
       setConversations(originalConversations);
@@ -106,9 +108,7 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTitle }),
       });
-      if (!response.ok) {
-        setConversations(originalConversations);
-      }
+      if (!response.ok) setConversations(originalConversations); // Revert on failure
     } catch (error) {
       console.error(error);
       setConversations(originalConversations);
@@ -116,28 +116,25 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
   };
   
   const handleSendMessage = async (messageContent: string, attachments?: FileAttachment[]) => {
-    const isNewChat = !currentConversation;
-    const conversationId = currentConversation?.id || crypto.randomUUID();
-    let currentMessages = [...chatState.messages];
-
     const userMessage: Message = { id: crypto.randomUUID(), content: messageContent, isUser: true, timestamp: new Date(), attachments };
-    currentMessages.push(userMessage);
     
+    // Optimistically update the UI with the user's message
     setChatState(prev => ({ ...prev, messages: [...prev.messages, userMessage], isTyping: true }));
 
-    const aiMessagePlaceholder: Message = { id: crypto.randomUUID(), content: "", isUser: false, timestamp: new Date() };
-    setChatState(prev => ({ ...prev, messages: [...prev.messages, aiMessagePlaceholder], isTyping: true }));
-    
     try {
       const stream = await sendMessageToDify(messageContent, persona, language, chatState.conversationId || undefined);
       if (!stream) throw new Error("No response stream received");
-
-      setChatState(prev => ({ ...prev, isTyping: false }));
       
       const reader = stream.getReader();
       const decoder = new TextDecoder();
       let fullResponse = "";
+      let finalDifyConvId = chatState.conversationId;
+
+      const aiMessagePlaceholderId = crypto.randomUUID();
+      // Add AI placeholder and stop the "typing" indicator
+      setChatState(prev => ({ ...prev, messages: [...prev.messages, { id: aiMessagePlaceholderId, content: "", isUser: false, timestamp: new Date() }], isTyping: false }));
       
+      // Read the stream from the API
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -147,42 +144,50 @@ export function EnhancedChatPage({ language, onLanguageChange }: EnhancedChatPag
           if (line.startsWith("data: ")) {
             try {
               const jsonData = JSON.parse(line.substring(6));
-              if (jsonData.event === "agent_message" || jsonData.event === "message") {
+              if (jsonData.event === 'agent_message' || jsonData.event === 'message') {
                 fullResponse += jsonData.answer || "";
-                setChatState(prev => ({...prev, messages: prev.messages.map(msg => msg.id === aiMessagePlaceholder.id ? { ...msg, content: fullResponse } : msg)}));
+                setChatState(prev => ({...prev, messages: prev.messages.map(msg => msg.id === aiMessagePlaceholderId ? { ...msg, content: fullResponse } : msg)}));
               }
-              if (jsonData.event === "message_end") {
-                setChatState(prev => ({...prev, conversationId: jsonData.conversation_id}));
+              if (jsonData.event === 'message_end') {
+                finalDifyConvId = jsonData.conversation_id;
               }
             } catch (e) { /* Ignore parsing errors */ }
           }
         }
       }
       
-      currentMessages.push({ ...aiMessagePlaceholder, content: fullResponse });
-
-      const title = isNewChat ? (messageContent.length > 40 ? messageContent.substring(0, 40) + "..." : messageContent) : currentConversation.title;
+      const finalMessages = [...chatState.messages.filter(m => m.id !== aiMessagePlaceholderId), { id: aiMessagePlaceholderId, content: fullResponse, isUser: false, timestamp: new Date() }];
+      const title = !currentConversation ? (messageContent.length > 40 ? messageContent.substring(0, 40) + "..." : messageContent) : currentConversation.title;
+      const conversationIdToSave = currentConversation?.id; // Will be undefined for a new chat
       
-      const response = await fetch('/api/conversations', {
+      // Save the complete conversation to the database
+      const saveResponse = await fetch('/api/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: conversationId, title, messages: currentMessages, persona }),
+        body: JSON.stringify({ id: conversationIdToSave, title, messages: finalMessages, persona }),
       });
-      if (!response.ok) throw new Error("Failed to save conversation");
+      if (!saveResponse.ok) throw new Error("Failed to save conversation");
       
-      // Refresh the conversation list from the server to get the latest data
-      await fetchConversations();
+      const savedConv = await saveResponse.json();
+      
+      // Update the state with the final data from the server
+      setConversations(prev => {
+          const existing = prev.find(c => c.id === savedConv.id);
+          if (existing) {
+              return prev.map(c => c.id === savedConv.id ? { ...savedConv, lastUpdated: new Date(savedConv.created_at) } : c);
+          }
+          return [{ ...savedConv, lastUpdated: new Date(savedConv.created_at) }, ...prev];
+      });
 
-      // If it was a new chat, load it as the current one
-      if (isNewChat) {
-          const newConv = await response.json();
-          setCurrentConversation({ ...newConv, lastUpdated: new Date(newConv.created_at) });
+      if (!currentConversation) {
+          setCurrentConversation({ ...savedConv, lastUpdated: new Date(savedConv.created_at) });
       }
+      setChatState(prev => ({...prev, conversationId: finalDifyConvId}));
 
     } catch (error) {
       console.error("Error sending message:", error);
-      const errorMessageContent = `Sorry, there was an error: ${error instanceof Error ? error.message : "Unknown error"}`;
-      setChatState(prev => ({...prev, isTyping: false, messages: prev.messages.map(msg => msg.id === aiMessagePlaceholder.id ? { ...msg, content: errorMessageContent } : msg)}));
+      const errorMessage = `Sorry, an error occurred: ${error instanceof Error ? error.message : "Please try again."}`;
+      setChatState(prev => ({...prev, isTyping: false, messages: [...prev.messages, {id: crypto.randomUUID(), content: errorMessage, isUser: false, timestamp: new Date()}]}));
     }
   };
 
