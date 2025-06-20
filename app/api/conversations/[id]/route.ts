@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-// Handles DELETE /api/conversations/some-uuid
+// Handles DELETE request to /api/conversations/some-uuid
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
@@ -23,7 +23,7 @@ export async function DELETE(
   return NextResponse.json({ message: "Deleted successfully" });
 }
 
-// Handles PATCH /api/conversations/some-uuid (for renaming)
+// Handles PATCH request to /api/conversations/some-uuid (for renaming)
 export async function PATCH(
     request: Request,
     { params }: { params: { id: string } }
